@@ -34,10 +34,45 @@ async function run() {
 
         const agreementsCollection = client.db("buildingManagement").collection("agreements")
 
+        const paymentsCollection = client.db("buildingManagement").collection("payments")
+
         const usersCollection = client.db("buildingManagement").collection("users")
         const announceCollection = client.db("buildingManagement").collection("announce")
 
         const couponCollection = client.db("buildingManagement").collection("coupon")
+
+
+        // verifyToken Related code 
+        const verifyToken = (req, res, next) => {
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'forbidden access' })
+            }
+
+            const token = req.headers.authorization.split(' ')[1];
+
+            jwt.verify(token, process.env.TOKEN_SECRET, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'forbidden access' })
+                }
+                req.decoded = decoded;
+                next();
+            })
+        }
+
+
+        //   verifyAdmin related code 
+
+        const verifYAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await usersCollection.findOne(query)
+            const isAdmin = user?.role == 'admin';
+            if (!isAdmin) {
+                res.status(401).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
 
 
         // jwt related apis
@@ -67,7 +102,7 @@ async function run() {
         })
 
 
-        app.get('/users/:email', async (req, res) => {
+        app.get('/users/:email', verifYAdmin, async (req, res) => {
             const email = req.params.email;
             const result = await usersCollection.findOne({ email })
 
@@ -111,6 +146,7 @@ async function run() {
             const updateAgreement = {
                 $set: {
                     status: agreementUpdateData.status,
+                    request: agreementUpdateData.request,
                 }
             }
             const result = await agreementsCollection.updateOne(filter, updateAgreement, options)
@@ -133,28 +169,37 @@ async function run() {
         })
 
 
+
+        // payment related api
+        app.post('/payments', async (req, res) => {
+            const paymentsItem = req.body;
+            const result = await paymentsCollection.insertOne(paymentsItem)
+            res.send(result)
+        })
+
+
         // announce related api
 
-        app.post('/announce', async (req, res) => {
+        app.post('/announce', verifYAdmin, verifyToken, async (req, res) => {
             const announceData = req.body;
             const result = await announceCollection.insertOne(announceData)
             res.send(result)
         })
 
-        app.get('/announce', async (req, res) => {
+        app.get('/announce', verifYAdmin, verifyToken, async (req, res) => {
             const result = await announceCollection.find().toArray();
             res.send(result)
         })
 
         // coupon collection related api
-        app.post('/coupon', async (req, res) => {
+        app.post('/coupon', verifYAdmin, verifyToken, async (req, res) => {
             const couponData = req.body;
             const result = await couponCollection.insertOne(couponData)
             res.send(result)
         })
 
 
-        app.get('/coupon',async (req,res)=>{
+        app.get('/coupon',verifYAdmin, async (req, res) => {
             const result = await couponCollection.find().toArray();
             res.send(result)
         })
