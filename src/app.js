@@ -8,7 +8,7 @@
 // const authenticationRoutes = require('./routes/authentication/index') 
 // const apartmentRoutes = require('./routes/authentication/Apartments/index')
 // // import middlewares folder
-//  applyMiddleWares(app)
+// //  applyMiddleWares(app)
 
 // //  token related api
 // app.use(authenticationRoutes)

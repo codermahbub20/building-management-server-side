@@ -20,7 +20,7 @@
 //         required: true
 //     },
 //     rent:{
-//         type: String,
+//         // type: String,
 //         required: true
 //     },
     

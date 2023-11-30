@@ -1,9 +1,14 @@
+require('dotenv').config();
 const express = require('express')
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 const jwt = require('jsonwebtoken')
 const cors = require('cors');
-require('dotenv').config();
+
 const port = process.env.PORT || 5000;
 
 
@@ -40,6 +45,25 @@ async function run() {
         const announceCollection = client.db("buildingManagement").collection("announce")
 
         const couponCollection = client.db("buildingManagement").collection("coupon")
+
+
+        // payment related api
+
+        app.post('/create-payment-intent', async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
+            console.log(amount, 'amount inside the intent')
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+        });
 
 
         // verifyToken Related code 
@@ -102,7 +126,7 @@ async function run() {
         })
 
 
-        app.get('/users/:email', verifYAdmin, async (req, res) => {
+        app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
             const result = await usersCollection.findOne({ email })
 
@@ -114,14 +138,6 @@ async function run() {
 
             res.send(result)
         })
-
-        // app.post('/user', async (req, res) => {
-        //     const user = req.body;
-        //     const result = await usersCollection.insertOne(user)
-        //     console.log(result)
-        //     res.send(result)
-        // })
-
 
 
 
@@ -154,19 +170,51 @@ async function run() {
         })
 
 
-        app.put('/users/:id', async (req, res) => {
-            const id = req.params.id;
-            const filter = { _id: new ObjectId(id) }
-            const options = { upsert: true };
-            const usersUpdateData = req.body;
-            const updateUsers = {
-                $set: {
-                    role: usersUpdateData.role,
-                }
+        app.patch('/users/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+                const filter = { email: email };
+        
+                const usersUpdateData = req.body;
+                const updateUsers = {
+                    $set: {
+                        role: usersUpdateData.role,
+                    },
+                };
+        
+                const result = await usersCollection.updateOne(filter, updateUsers);
+        
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ error: 'Error' });
             }
-            const result = await usersCollection.updateOne(filter, updateUsers, options)
-            res.send(result);
-        })
+        });
+        
+
+
+        // this patch using members management
+        app.patch('/users/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const filter = { _id: new ObjectId(id) };
+        
+                const usersUpdateData = req.body;
+                const updateUsers = {
+                    $set: {
+                        role: usersUpdateData.role,
+                    },
+                };
+        
+                const result = await usersCollection.updateOne(filter, updateUsers);
+        
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ error: ' Error' });
+            }
+        });
+        
 
 
 
@@ -178,30 +226,58 @@ async function run() {
         })
 
 
+        app.get('/payments', async (req, res) => {
+            const result = await paymentsCollection.find().toArray()
+            res.send(result)
+        })
+
         // announce related api
 
-        app.post('/announce', verifYAdmin, verifyToken, async (req, res) => {
+        app.post('/announce', async (req, res) => {
             const announceData = req.body;
             const result = await announceCollection.insertOne(announceData)
             res.send(result)
         })
 
-        app.get('/announce', verifYAdmin, verifyToken, async (req, res) => {
+        app.get('/announce', async (req, res) => {
             const result = await announceCollection.find().toArray();
             res.send(result)
         })
 
         // coupon collection related api
-        app.post('/coupon', verifYAdmin, verifyToken, async (req, res) => {
+        app.post('/coupon', async (req, res) => {
             const couponData = req.body;
             const result = await couponCollection.insertOne(couponData)
             res.send(result)
         })
 
 
-        app.get('/coupon',verifYAdmin, async (req, res) => {
+        app.get('/coupon', async (req, res) => {
             const result = await couponCollection.find().toArray();
             res.send(result)
+        })
+
+        app.get('/coupon/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await couponCollection.findOne(query)
+            res.send(result)
+        })
+
+        app.put('/coupon/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true };
+            const couponUpdateData = req.body;
+            const updateCoupon = {
+                $set: {
+                    code: couponUpdateData.code,
+                    discount: couponUpdateData.discount,
+                    description: couponUpdateData.description,
+                }
+            }
+            const result = await couponCollection.updateOne(filter, updateCoupon, options)
+            res.send(result);
         })
 
 
@@ -227,8 +303,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();

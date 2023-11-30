@@ -7,4 +7,4 @@
 //     res.send({ token })
 //   }
 
-//   // module.exports = createToken
+//   module.exports = createToken
